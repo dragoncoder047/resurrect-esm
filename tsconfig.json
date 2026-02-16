@@ -1,11 +1,19 @@
 {
-    "files": [
-        "resurrect.js"
-    ],
     "compilerOptions": {
-        "lib": ["ES2015", "DOM"],
-        "allowJs": true,
-        "declaration": true,
-        "emitDeclarationOnly": true
+        "noEmit": true,
+        "target": "ESNext",
+        "esModuleInterop": true,
+        "resolveJsonModule": true,
+        "strict": true,
+        "noUncheckedIndexedAccess": false,
+        "noImplicitAny": true,
+        "noFallthroughCasesInSwitch": true,
+        "strictNullChecks": true,
+        "moduleResolution": "Bundler",
+        "module": "ESNext",
+        "lib": [
+            "esnext",
+            "dom",
+        ]
     }
 }

@@ -1,7 +1,14 @@
-# ResurrectTS
+# ResurrectESM
 
-> [ResurrectJS](https://github.com/skeeto/resurrect-js) with type declarations, tweaked to be a CommonJS module for node
-and bundlers.
+An ES6 module port of ResurrectTS.
+
+> [!CAUTION]
+> This is *not* just a naive `exports.foo` => `export {foo}` rewrite. Some API changes have been made:
+>
+> * All of the "irrelevant" methods of Resurrect have been renamed using private names (that are then mangled further by esbuild).
+> * ResurrectError is now a top-level export, instead of living inside a Resurrect object.
+> * NamespaceResolver is now a top-level export, instead of living inside the Resurrect static constructor namespace.
+> * NamespaceResolver now has a new method, `getConstructor(name: string)`, which should return the constructor function to generate the object (it will not be called directly, so the parameters are irrelevant).
 
 ResurrectJS preserves object behavior (prototypes) and reference
 circularity with a special JSON encoding. Unlike flat JSON, it can
@@ -9,7 +16,6 @@ also properly resurrect these types of values:
 
  * Date
  * RegExp
- * DOM objects
  * `undefined`
  * NaN, Infinity, -Infinity
 
@@ -25,12 +31,13 @@ Read about [how it works](http://nullprogram.com/blog/2013/03/28/).
 
 ## Examples
 
-```javascript
-import {Resurrect} from 'resurrect-ts';
-function Foo() {}
-Foo.prototype.greet = function() { return "hello"; };
+```ts
+window.Foo = class Foo {
+    greet() { return "hello"; }
+}
 
 // Behavior is preserved:
+import { Resurrect } from "resurrect-ts";
 var necromancer = new Resurrect();
 var json = necromancer.stringify(new Foo());
 var foo = necromancer.resurrect(json);
@@ -45,7 +52,7 @@ array[1].greet();  // => "hello"
 // Dates are restored properly
 json = necromancer.stringify(new Date());
 var date = necromancer.resurrect(json);
-Object.prototype.toString.call(date);  // => "[object Date]"
+{}.toString.call(date);  // => "[object Date]"
 ```
 
 ## Options
@@ -70,17 +77,19 @@ properties:
      serialization, resurrection information will not be encoded. You
      still get circularity and Date support.
 
- * *resolver* (NamespaceResolver): Converts between a name
+ * *resolver* (`NamespaceResolver`): Converts between a name
      and a prototype. Create a custom resolver if your constructors
      are not stored in global variables. The resolver has two methods:
      getName(object) and getPrototype(string).
 
+> [!CAUTION]
+> If you're using ES6 modules for your custom classes, you MUST use a custom resolver since module scope is not global scope!
+
 For example,
 
-```typescript
-import {Resurrect} from 'resurrect-ts';
-var necromancer = new Resurrect({
-    prefix: '__#',
+```javascript
+const necromancer = new Resurrect({
+    prefix: "__#",
     cleanup: true
 });
 ```
@@ -118,15 +127,13 @@ There is a caveat with the provided resolver, NamespaceResolver: all
 constructors *must* be explicitly named when defined. For example, see
 the Foo constructor in this example,
 
-```typescript
-import {Resurrect, NamespaceResolver} from 'resurrect-ts';
-const ns = {
-    Foo() {
-        this.bar = true;
-    }
+```ts
+const namespace = {};
+namespace.Foo = function Foo() {
+    this.bar = true;
 };
 const necromancer = new Resurrect({
-    resolver: new NamespaceResolver(ns)
+    resolver: new Resurrect.NamespaceResolver(namespace)
 });
 ```
 
@@ -139,6 +146,5 @@ Foo to the surrounding function within the body of Foo.
 ## See Also
 
 * [HydrateJS](https://github.com/nanodeath/HydrateJS)
-
 
 [json-mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify
