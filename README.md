@@ -31,27 +31,27 @@ Read about [how it works](http://nullprogram.com/blog/2013/03/28/).
 
 ## Examples
 
-```ts
+```typescript
+import { Resurrect } from "resurrect-esm";
 window.Foo = class Foo {
     greet() { return "hello"; }
 }
 
 // Behavior is preserved:
-import { Resurrect } from "resurrect-ts";
-var necromancer = new Resurrect();
-var json = necromancer.stringify(new Foo());
-var foo = necromancer.resurrect(json);
+const necromancer = new Resurrect();
+const json = necromancer.stringify(new Foo());
+const foo = necromancer.resurrect(json);
 foo.greet();  // => "hello"
 
 // References to the same object are preserved:
 json = necromancer.stringify([foo, foo]);
-var array = necromancer.resurrect(json);
+const array = necromancer.resurrect(json);
 array[0] === array[1];  // => true
 array[1].greet();  // => "hello"
 
 // Dates are restored properly
 json = necromancer.stringify(new Date());
-var date = necromancer.resurrect(json);
+const date = necromancer.resurrect(json);
 {}.toString.call(date);  // => "[object Date]"
 ```
 
@@ -88,6 +88,7 @@ properties:
 For example,
 
 ```javascript
+import { Resurrect } from "resurrect-esm";
 const necromancer = new Resurrect({
     prefix: "__#",
     cleanup: true
@@ -128,12 +129,16 @@ constructors *must* be explicitly named when defined. For example, see
 the Foo constructor in this example,
 
 ```ts
-const namespace = {};
-namespace.Foo = function Foo() {
-    this.bar = true;
+import { Resurrect, NamespaceResolver } from "resurrect-esm";
+const namespace = {
+    Foo: class {
+        constructor() {
+            this.bar = true;
+        }
+    }
 };
 const necromancer = new Resurrect({
-    resolver: new Resurrect.NamespaceResolver(namespace)
+    resolver: new NamespaceResolver(namespace)
 });
 ```
 
