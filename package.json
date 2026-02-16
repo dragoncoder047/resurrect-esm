@@ -1,6 +1,6 @@
 {
     "name": "resurrect-esm",
-    "version": "2.0.2",
+    "version": "2.0.3",
     "type": "module",
     "description": "ResurrectJS preserves object behavior (prototypes) and reference circularity with a special JSON encoding. Unlike flat JSON, it can also properly resurrect self-referential objects, objects with shared structure, Dates, RegExps, HTMLElements, NaN, Infinity, undefined (which won't get turned into null), and any other custom object type given the proper resolver.",
     "repository": {

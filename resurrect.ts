@@ -83,6 +83,7 @@
 
 export class Resurrect {
     private _table: any[] | null;
+    private _cleanups: (() => void)[] = [];
     prefix: string;
     cleanup: boolean;
     revive: boolean;
@@ -180,10 +181,12 @@ export class Resurrect {
                     throw new ResurrectError("Constructor mismatch!");
                 } else {
                     object[this._protocode] = constructor;
+                    this._cleanups.push(() => { delete object[this._protocode as any]; })
                 }
             }
         }
         object[this._refcode] = this._table!.length;
+        this._cleanups.push(() => { delete object[this._refcode as any]; })
         this._table!.push(object);
         return object[this._refcode];
     }
@@ -241,32 +244,30 @@ export class Resurrect {
      * Visit root and all its ancestors, visiting atoms with f.
      * @returns A fresh copy of root to be serialized.
      */
-    private _visit(root: any, f: (obj: any) => any, replacer?: (k: string, v: any) => any): any {
+    private _visit(root: any, transform: (obj: any) => any, replacer?: (k: string, v: any) => any): any {
         if (Resurrect.isAtom(root)) {
-            return f(root);
+            return transform(root);
         } else if (!this._isTagged(root)) {
             let copy: any = null;
             if (Resurrect._isArray(root)) {
                 copy = [];
                 root[this._refcode as any] = this._tag(copy);
+                this._cleanups.push(() => { delete root[this._refcode as any]; })
                 for (let i = 0; i < root.length; i++) {
-                    copy.push(this._visit(root[i], f, replacer));
+                    copy.push(this._visit(root[i], transform, replacer));
                 }
             } else { /* Object */
                 copy = Object.create(Object.getPrototypeOf(root));
                 root[this._refcode as any] = this._tag(copy);
-                for (const key in root) {
+                this._cleanups.push(() => { delete root[this._refcode as any]; })
+                for (const key of Object.getOwnPropertyNames(root)) {
                     let value = root[key];
-                    if (root.hasOwnProperty(key)) {
-                        if (replacer && value !== undefined) {
-                            // Call replacer like JSON.stringify's replacer
-                            value = replacer.call(root, key, root[key]);
-                            if (value === undefined) {
-                                continue; // Omit from result
-                            }
-                        }
-                        copy[key] = this._visit(value, f, replacer);
+                    if (replacer && value !== undefined) {
+                        // Call replacer like JSON.stringify's replacer
+                        value = replacer.call(root, key, root[key]);
+                        if (value === undefined) continue; // Omit from result
                     }
+                    copy[key] = this._visit(value, transform, replacer);
                 }
             }
             copy[this._origcode] = root;
@@ -321,26 +322,31 @@ export class Resurrect {
             replacer = this._replacerWrapper(replacer);
         } else if (Resurrect._isArray(replacer)) {
             const acceptKeys = replacer;
-            replacer = function (k, v) {
-                return acceptKeys.indexOf(k) >= 0 ? v : undefined;
-            };
+            replacer = (k, v) => acceptKeys.includes(k) ? v : undefined;
         }
         if (Resurrect.isAtom(object)) {
             return JSON.stringify(this._handleAtom(object), replacer, space);
         } else {
-            this._table = [];
-            this._visit(object, this._handleAtom.bind(this), replacer);
-            for (let i = 0; i < this._table.length; i++) {
-                if (this.cleanup) {
-                    delete this._table[i][this._origcode][this._refcode];
-                } else {
-                    this._table[i][this._origcode][this._refcode] = null;
+            this._cleanups = [];
+            const table = this._table = [] as any[];
+            try {
+                this._visit(object, this._handleAtom.bind(this), replacer);
+            } catch (e) {
+                this._cleanups.forEach(e => e());
+                throw e;
+            } finally {
+                for (let i = 0; i < table.length; i++) {
+                    if (this.cleanup) {
+                        delete table[i][this._origcode][this._refcode];
+                    } else {
+                        const obj = table[i][this._origcode];
+                        if (obj) obj[this._refcode] = null;
+                    }
+                    delete table[i][this._refcode];
+                    delete table[i][this._origcode];
                 }
-                delete this._table[i][this._refcode];
-                delete this._table[i][this._origcode];
+                this._table = null;
             }
-            const table = this._table;
-            this._table = null;
             return JSON.stringify(table, null, space);
         }
     }
@@ -359,18 +365,17 @@ export class Resurrect {
                     delete (object as any)[this._protocode];
                 }
                 return object;
-            } else { // IE
-                const copy = Object.create(prototype);
-                for (const key in object) {
-                    if (object.hasOwnProperty(key) && key !== this.prefix) {
-                        copy[key] = object[key];
-                    }
-                }
-                return copy;
             }
-        } else {
-            return object;
+            // IE
+            const copy = Object.create(prototype);
+            for (const key of Object.getOwnPropertyNames(object)) {
+                if (key !== this._protocode) {
+                    copy[key] = (object as any)[key];
+                }
+            }
+            return copy;
         }
+        return object;
     }
 
     /**
@@ -379,33 +384,34 @@ export class Resurrect {
     resurrect(string: string): any {
         let result = null;
         const data = JSON.parse(string);
-        if (Resurrect._isArray(data)) {
-            this._table = data;
-            /* Restore __proto__. */
-            if (this.revive) {
-                for (let i = 0; i < this._table.length; i++) {
-                    this._table[i] = this._fixPrototype(this._table[i]);
+        try {
+            if (Resurrect._isArray(data)) {
+                this._table = data;
+                /* Restore __proto__. */
+                if (this.revive) {
+                    for (let i = 0; i < this._table.length; i++) {
+                        this._table[i] = this._fixPrototype(this._table[i]);
+                    }
                 }
-            }
-            /* Re-establish object references and construct atoms. */
-            for (let i = 0; i < this._table.length; i++) {
-                const object = this._table[i];
-                for (const key in object) {
-                    if (object.hasOwnProperty(key)) {
+                /* Re-establish object references and construct atoms. */
+                for (let i = 0; i < this._table.length; i++) {
+                    const object = this._table[i];
+                    for (const key of Object.getOwnPropertyNames(object)) {
                         if (!(Resurrect.isAtom(object[key]))) {
                             object[key] = this._decode(object[key]);
                         }
                     }
                 }
+                result = this._table[0];
+            } else if (Resurrect._isObject(data)) {
+                this._table = [];
+                result = this._decode(data);
+            } else {
+                result = data;
             }
-            result = this._table[0];
-        } else if (Resurrect._isObject(data)) {
-            this._table = [];
-            result = this._decode(data);
-        } else {
-            result = data;
+        } finally {
+            this._table = null;
         }
-        this._table = null;
         return result;
     }
 }

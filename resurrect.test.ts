@@ -107,3 +107,11 @@ function suite(opt?: ResurrectOptions) {
 describe("default options", () => suite());
 describe("custom prefix", () => suite({ prefix: "qwerty" }));
 describe("no revive", () => suite({ revive: false }));
+
+test("malformed state bug", () => {
+    // Test for the bug found in skeeto/resurrect-js#11
+    const r = new Resurrect();
+    const O = { test() { } };
+    expect(() => r.stringify(O)).toThrow(new ResurrectError("Can't serialize functions."));
+    expect(() => r.stringify(O)).toThrow(new ResurrectError("Can't serialize functions."));
+});
