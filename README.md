@@ -9,7 +9,7 @@ An ES6 module port of ResurrectTS.
 > * ResurrectError is now a top-level export, instead of living inside a Resurrect object.
 > * NamespaceResolver is now a top-level export, instead of living inside the Resurrect static constructor namespace.
 > * NamespaceResolver now has a new method, `getConstructor(name: string)`, which should return the constructor function to generate the object (it will not be called directly, so the parameters are irrelevant).
-> The bug found in skeeto/resurrect-js#11 has been fixed.
+> * The bug found in skeeto/resurrect-js#11 has been fixed.
 
 ResurrectJS preserves object behavior (prototypes) and reference
 circularity with a special JSON encoding. Unlike flat JSON, it can
