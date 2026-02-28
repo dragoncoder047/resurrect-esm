@@ -143,7 +143,7 @@ export class Resurrect {
     private static _isDate = Resurrect._is("Date") as (obj: any) => obj is Date;
     private static _isRegExp = Resurrect._is("RegExp") as (obj: any) => obj is RegExp;
     private static _isObject = Resurrect._is("Object") as (obj: any) => obj is object;
-    private static isAtom(object: any) {
+    private static _isAtom(object: any) {
         return !Resurrect._isObject(object) && !Resurrect._isArray(object);
     }
     private static _isPrimitive(object: any) {
@@ -245,7 +245,7 @@ export class Resurrect {
      * @returns A fresh copy of root to be serialized.
      */
     private _visit(root: any, transform: (obj: any) => any, replacer?: (k: string, v: any) => any): any {
-        if (Resurrect.isAtom(root)) {
+        if (Resurrect._isAtom(root)) {
             return transform(root);
         } else if (!this._isTagged(root)) {
             let copy: any = null;
@@ -324,7 +324,7 @@ export class Resurrect {
             const acceptKeys = replacer;
             replacer = (k, v) => acceptKeys.includes(k) ? v : undefined;
         }
-        if (Resurrect.isAtom(object)) {
+        if (Resurrect._isAtom(object)) {
             return JSON.stringify(this._handleAtom(object), replacer, space);
         } else {
             this._cleanups = [];
@@ -397,7 +397,7 @@ export class Resurrect {
                 for (let i = 0; i < this._table.length; i++) {
                     const object = this._table[i];
                     for (const key of Object.getOwnPropertyNames(object)) {
-                        if (!(Resurrect.isAtom(object[key]))) {
+                        if (!(Resurrect._isAtom(object[key]))) {
                             object[key] = this._decode(object[key]);
                         }
                     }
