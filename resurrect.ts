@@ -346,6 +346,7 @@ export class Resurrect {
                     delete table[i][this._origcode];
                 }
                 this._table = null;
+                this._cleanups = [];
             }
             return JSON.stringify(table, null, space);
         }
