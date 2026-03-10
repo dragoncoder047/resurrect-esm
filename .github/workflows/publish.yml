@@ -12,11 +12,11 @@ jobs:
         with:
           node-version: "24"
           registry-url: https://registry.npmjs.org
+          cache: pnpm
       - uses: pnpm/action-setup@v4
         with:
           version: 10
-          cache: on
-      - run: pnpm install
+          run_install: yes
       - run: pnpm test
       - run: pnpm prepare
       - run: npm publish
