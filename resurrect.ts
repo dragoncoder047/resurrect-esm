@@ -5,7 +5,7 @@
  *
  * ResurrectJS preserves object behavior (prototypes) and reference
  * circularity with a special JSON encoding. Unlike regular JSON,
- * Date, RegExp, DOM objects, and `undefined` are also properly
+ * Date, URL, RegExp, DOM objects, and `undefined` are also properly
  * preserved.
  *
  * ## Examples
@@ -41,16 +41,10 @@
  *     string. This option must be consistent between both
  *     serialization and deserialization.
  *
- *   cleanup (false): Perform full property cleanup after both
- *     serialization and deserialization using the `delete`
- *     operator. This may cause performance penalties (breaking hidden
- *     classes in V8) on objects that ResurrectJS touches, so enable
- *     with care.
- *
  *   revive (true): Restore behavior (__proto__) to objects that have
  *     been resurrected. If this is set to false during serialization,
  *     resurrection information will not be encoded. You still get
- *     circularity and Date support.
+ *     circularity and Date/URL support.
  *
  *   resolver (Resurrect.NamespaceResolver(window)): Converts between
  *     a name and a prototype. Create a custom resolver if your
@@ -60,8 +54,7 @@
  * For example,
  *
  * const necromancer = new Resurrect({
- *     prefix: '__#',
- *     cleanup: true
+ *     prefix: "__#",
  * });
  *
  * ## Caveats
@@ -141,6 +134,7 @@ export class Resurrect {
     private static _isNumber = Resurrect._is("Number") as (obj: any) => obj is number;
     private static _isFunction = Resurrect._is("Function") as (obj: any) => obj is Function;
     private static _isDate = Resurrect._is("Date") as (obj: any) => obj is Date;
+    private static _isURL = Resurrect._is("URL") as (obj: any) => obj is URL;
     private static _isRegExp = Resurrect._is("RegExp") as (obj: any) => obj is RegExp;
     private static _isObject = Resurrect._is("Object") as (obj: any) => obj is object;
     private static _isAtom(object: any) {
@@ -151,6 +145,11 @@ export class Resurrect {
             Resurrect._isNumber(object) ||
             Resurrect._isString(object) ||
             Resurrect._isBoolean(object);
+    }
+
+    private _cleanup() {
+        this._cleanups.forEach(e => e());
+        this._cleanups = [];
     }
 
     /**
@@ -181,12 +180,12 @@ export class Resurrect {
                     throw new ResurrectError("Constructor mismatch!");
                 } else {
                     object[this._protocode] = constructor;
-                    this._cleanups.push(() => { delete object[this._protocode as any]; })
+                    this._cleanups.push(() => delete object[this._protocode]);
                 }
             }
         }
         object[this._refcode] = this._table!.length;
-        this._cleanups.push(() => { delete object[this._refcode as any]; })
+        this._cleanups.push(() => delete object[this._refcode]);
         this._table!.push(object);
         return object[this._refcode];
     }
@@ -252,14 +251,14 @@ export class Resurrect {
             if (Resurrect._isArray(root)) {
                 copy = [];
                 root[this._refcode as any] = this._tag(copy);
-                this._cleanups.push(() => { delete root[this._refcode as any]; })
+                this._cleanups.push(() => delete root[this._refcode as any]);
                 for (let i = 0; i < root.length; i++) {
                     copy.push(this._visit(root[i], transform, replacer));
                 }
             } else { /* Object */
                 copy = Object.create(Object.getPrototypeOf(root));
                 root[this._refcode as any] = this._tag(copy);
-                this._cleanups.push(() => { delete root[this._refcode as any]; })
+                this._cleanups.push(() => delete root[this._refcode]);
                 for (const key of Object.getOwnPropertyNames(root)) {
                     let value = root[key];
                     if (replacer && value !== undefined) {
@@ -288,6 +287,8 @@ export class Resurrect {
             return this._builder("Resurrect.Node", [new XMLSerializer().serializeToString(atom)]);
         } else if (Resurrect._isDate(atom)) {
             return this._builder("Date", [atom.toISOString()]);
+        } else if (Resurrect._isURL(atom)) {
+            return this._builder("URL", [atom.href]);
         } else if (Resurrect._isRegExp(atom)) {
             return this._builder("RegExp", ("" + atom).match(/\/(.+)\/([a-z]*)/)!.slice(1));
         } else if (atom === undefined) {
@@ -317,7 +318,7 @@ export class Resurrect {
     /**
      * Serialize an arbitrary JavaScript object, carefully preserving it.
      */
-    stringify(object: any, replacer?: any[] | ((k: string, v: any) => any), space?: string) {
+    stringify(object: any, replacer?: any[] | ((k: string, v: any) => any), space?: string | number) {
         if (Resurrect._isFunction(replacer)) {
             replacer = this._replacerWrapper(replacer);
         } else if (Resurrect._isArray(replacer)) {
@@ -332,23 +333,24 @@ export class Resurrect {
             try {
                 this._visit(object, this._handleAtom.bind(this), replacer);
             } catch (e) {
-                this._cleanups.forEach(e => e());
+                this._cleanup();
                 throw e;
             } finally {
                 for (let i = 0; i < table.length; i++) {
                     if (this.cleanup) {
-                        delete table[i][this._origcode][this._refcode];
+                        delete table[i]?.[this._origcode]?.[this._refcode];
                     } else {
-                        const obj = table[i][this._origcode];
+                        const obj = table[i]?.[this._origcode];
                         if (obj) obj[this._refcode] = null;
                     }
-                    delete table[i][this._refcode];
-                    delete table[i][this._origcode];
+                    delete table[i]?.[this._refcode];
+                    delete table[i]?.[this._origcode];
                 }
                 this._table = null;
-                this._cleanups = [];
             }
-            return JSON.stringify(table, null, space);
+            const s = JSON.stringify(table, null, space);
+            if (this.cleanup) this._cleanup();
+            return s;
         }
     }
 
@@ -425,6 +427,7 @@ export interface ResurrectOptions {
      * important that you don't use any properties beginning with this
      * string. This option must be consistent between both
      * serialization and deserialization.
+     * @default "#"
      */
     prefix?: string;
     /**
@@ -433,6 +436,7 @@ export interface ResurrectOptions {
      * operator. This may cause performance penalties (breaking hidden
      * classes in V8) on objects that ResurrectJS touches, so enable
      * with care.
+     * @default false
      */
     cleanup?: boolean;
     /**
@@ -440,6 +444,7 @@ export interface ResurrectOptions {
      * been resurrected. If this is set to false during serialization,
      * resurrection information will not be encoded. You still get
      * circularity and Date support.
+     * @default true
      */
     revive?: boolean;
     /**
@@ -448,6 +453,7 @@ export interface ResurrectOptions {
      *
      * If you're using ES6 modules for your custom classes, you WILL need
      * to use this!
+     * @default undefined
      */
     resolver?: NamespaceResolver;
 }

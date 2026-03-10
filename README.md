@@ -16,6 +16,7 @@ circularity with a special JSON encoding. Unlike flat JSON, it can
 also properly resurrect these types of values:
 
  * Date
+ * URL
  * RegExp
  * `undefined`
  * NaN, Infinity, -Infinity
@@ -121,7 +122,7 @@ unwrapped. This means extra properties added to these objects will not
 be preserved.
 
 Functions cannot ever be serialized. Resurrect will throw an error if
-a function is found when traversing a data structure.
+a function is found when traversing a data structure, rather than just silently dropping the property or replacing it with `null` like JSON.stringify does.
 
 ### Custom Resolvers
 
@@ -132,9 +133,13 @@ the Foo constructor in this example,
 ```ts
 import { Resurrect, NamespaceResolver } from "resurrect-esm";
 const namespace = {
-    Foo: class {
+    Foo: class Foo {
         constructor() {
             this.bar = true;
+            Foo.bax(this);
+        }
+        static bax(obj) {
+
         }
     }
 };
@@ -148,6 +153,9 @@ itself has been given a matching name. This is how the resolver will
 find the name of the constructor in the namespace when given the
 constructor. Keep in mind that using this form will bind the variable
 Foo to the surrounding function within the body of Foo.
+
+If you're using a bundler, you **must** enable the "keep names" option
+for at least the classes that will be stringified, so that Resurrect.js can get the correct `.name` from the constructor functions. (For esbuild, the option is `--keep-names`.)
 
 ## See Also
 

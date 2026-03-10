@@ -66,7 +66,26 @@ function suite(opt?: ResurrectOptions) {
         expect(() => roundtrip(obj)).toThrow(new ResurrectError("Can't serialize functions."));
     });
 
+    test("can serialize URL objects ok", () => {
+        const obj = { a_url_object: new URL("about:test") };
+        expect(roundtrip(obj).a_url_object).toBeInstanceOf(URL);
+    });
+
     if (defOpts.revive) {
+        test("can revive classes with cleanup true and false", () => {
+            const ns = {
+                Foo: class Foo {
+                    bar: number;
+                    constructor() {
+                        this.bar = 1;
+                        Foo.bax();
+                    }
+                    static bax() { }
+                }
+            };
+            expect(roundtrip(new ns.Foo(), { cleanup: false, resolver: new NamespaceResolver(ns) })).toBeInstanceOf(ns.Foo);
+            expect(roundtrip(new ns.Foo(), { cleanup: true, resolver: new NamespaceResolver(ns) })).toBeInstanceOf(ns.Foo);
+        });
         test("revive and custom resolver", () => {
             class Dog {
                 constructor(public loudness: number, public sound: string) { }
