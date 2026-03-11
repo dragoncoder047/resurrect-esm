@@ -81,8 +81,8 @@ properties:
 
  * *resolver* (`NamespaceResolver`): Converts between a name
      and a prototype. Create a custom resolver if your constructors
-     are not stored in global variables. The resolver has two methods:
-     getName(object) and getPrototype(string).
+     are not stored in global variables. The resolver has three methods:
+     getName(object), getConstructor(string), and getPrototype(string).
 
 > [!CAUTION]
 > If you're using ES6 modules for your custom classes, you MUST use a custom resolver since module scope is not global scope!

@@ -98,6 +98,16 @@ function suite(opt?: ResurrectOptions) {
             expect(roundtripped).toBeInstanceOf(Dog);
             expect(roundtripped.woof()).toEqual("wowwowwow!");
         });
+        test("revive/serialize works with minifier-renamed classes", () => {
+            class z {
+                constructor(public foo: number) { };
+            }
+            const obj = new z(1);
+            const roundtripped = roundtrip(obj, {
+                resolver: new NamespaceResolver({ Foo: z }),
+            });
+            expect(roundtripped).toBeInstanceOf(z);
+        })
         test("can't serialize anonymous classes", () => {
             const obj = new class {
                 foo: number;

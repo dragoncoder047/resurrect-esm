@@ -49,7 +49,8 @@
  *   resolver (Resurrect.NamespaceResolver(window)): Converts between
  *     a name and a prototype. Create a custom resolver if your
  *     constructors are not stored in global variables. The resolver
- *     has two methods: getName(object) and getPrototype(string).
+ *     has three methods: getName(object), getConstructor(string), and
+ *     getPrototype(string).
  *
  * For example,
  *
@@ -73,6 +74,11 @@
  *
  * @see http://nullprogram.com/blog/2013/03/28/
  */
+
+import { parse, stringify } from "lib0/json";
+import { keys } from "lib0/object";
+
+const getPrototypeOf = Object.getPrototypeOf;
 
 export class Resurrect {
     private _table: any[] | null;
@@ -175,7 +181,7 @@ export class Resurrect {
         if (this.revive) {
             const constructor = this.resolver.getName(object);
             if (constructor) {
-                const proto = Object.getPrototypeOf(object);
+                const proto = getPrototypeOf(object);
                 if (this.resolver.getPrototype(constructor) !== proto) {
                     throw new ResurrectError("Constructor mismatch!");
                 } else {
@@ -256,7 +262,7 @@ export class Resurrect {
                     copy.push(this._visit(root[i], transform, replacer));
                 }
             } else { /* Object */
-                copy = Object.create(Object.getPrototypeOf(root));
+                copy = Object.create(getPrototypeOf(root));
                 root[this._refcode as any] = this._tag(copy);
                 this._cleanups.push(() => delete root[this._refcode]);
                 for (const key of Object.getOwnPropertyNames(root)) {
@@ -326,7 +332,7 @@ export class Resurrect {
             replacer = (k, v) => acceptKeys.includes(k) ? v : undefined;
         }
         if (Resurrect._isAtom(object)) {
-            return JSON.stringify(this._handleAtom(object), replacer, space);
+            return stringify(this._handleAtom(object), replacer, space);
         } else {
             this._cleanups = [];
             const table = this._table = [] as any[];
@@ -348,7 +354,7 @@ export class Resurrect {
                 }
                 this._table = null;
             }
-            const s = JSON.stringify(table, null, space);
+            const s = stringify(table, null, space);
             if (this.cleanup) this._cleanup();
             return s;
         }
@@ -386,7 +392,7 @@ export class Resurrect {
      */
     resurrect(string: string): any {
         let result = null;
-        const data = JSON.parse(string);
+        const data = parse(string);
         try {
             if (Resurrect._isArray(data)) {
                 this._table = data;
@@ -483,9 +489,10 @@ export class NamespaceResolver {
      * @returns null if the constructor is `Object` or `Array`.
      */
     getName(object: object): string | null {
-        let constructor = object.constructor.name;
+        const constructorFun = object.constructor;
+        let constructor = keys(this.scope).find(realName => this.scope[realName] === constructorFun) ?? constructorFun.name;
         if (constructor == null) { // IE
-            constructor = /^\s*function\s*([A-Za-z0-9_$]*)/.exec("" + object.constructor)?.[1] ?? "";
+            constructor = /^\s*function\s*([A-Za-z0-9_$]*)/.exec("" + constructorFun)?.[1] ?? "";
         }
         if (constructor === "") {
             throw new ResurrectError("Can't serialize objects with anonymous constructors.");
